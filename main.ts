@@ -42,8 +42,10 @@ async function register(port: number): Promise<void> {
       const response = await postJson('/register', { port }, 5_000);
       if (response.status === 200 || response.status === 201 || response.status === 204) return;
       if (response.status === 409) {
-        console.error('Another forge already registered with the environment.');
-        process.exit(1);
+        // The first register wins: a 409 means our own earlier register already
+        // landed (its response was lost, so we retried) and the environment
+        // holds our port. Treat it as success and serve, like the starter.
+        return;
       }
       if (response.status === 400 || response.status === 405) {
         console.error(`Register was rejected with ${response.status}; giving up.`);
@@ -84,7 +86,10 @@ async function waitUntilDone(): Promise<void> {
 
 const { server } = createApp();
 
-server.listen(0, '127.0.0.1', () => {
+// Bind every interface, like the starter: the environment dials the address
+// the register request came from, and a loopback-only bind is unreachable
+// from any other address (a split entry/env layout would fail boot).
+server.listen(0, () => {
   const address = server.address() as AddressInfo | null;
   if (address === null || typeof address !== 'object') {
     console.error('Could not determine the bound port.');
